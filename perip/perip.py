@@ -51,7 +51,9 @@ def calculate_energy_perip(num_input_activations, num_output_conversions,
             config.V_SUPPLY
         )
     
-    E_converter_dynamic = E_converter_per_op 
+    # PiM: 입력 1회 인가 시 D_OUT ADC가 병렬로 동시 동작.
+    # 에너지 = E_per_ADC × D_OUT × total_reads = E_per_ADC × num_output_conversions
+    E_converter_dynamic = E_converter_per_op * num_output_conversions
     # Control logic
     total_ops = num_input_activations + num_output_conversions
     E_control_dynamic = config.E_CONTROL * total_ops 

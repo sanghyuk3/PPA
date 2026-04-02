@@ -3,6 +3,23 @@ Cell.py
 RRAM Cell energy calculation
 """
 
+def calculate_rram_read_energy_gavg(V_read, G_avg, t_read):
+    """
+    Calculate RRAM cell read energy using directly measured average conductance.
+    Use this instead of calculate_rram_read_energy when G_avg is measured.
+
+    Args:
+        V_read (float): Read voltage (V)
+        G_avg (float): Measured average conductance (S)
+        t_read (float): Read time (s)
+
+    Returns:
+        float: Energy per cell read (J)
+    """
+    I_avg = G_avg * V_read
+    return V_read * I_avg * t_read
+
+
 def calculate_rram_read_energy(V_read, G_on, G_off, t_read, sparsity=0.05):
     """
     Calculate RRAM cell read energy with sparsity consideration

@@ -8,28 +8,23 @@ Global configuration for RRAM simulation
 # ============================================================
 RRAM_LAYERS = 12
 RRAM_NUM_SAMPLES = 872
-RRAM_SENT_LEN = 36
+RRAM_SENT_LEN = 36*14
 
-# Q matrix dimensions
-Q_D_IN = 15
-Q_D_OUT = 30
+# Q matrix dimensions (실제 W_Q: 768×768, 24×24 측정 어레이에서 확장)
+Q_D_IN = 768
+Q_D_OUT = 768
 
-# K matrix dimensions
-K_D_IN = 19
-K_D_OUT = 30
+# K matrix dimensions (실제 W_K: 768×768)
+K_D_IN = 768
+K_D_OUT = 768
 
-a = 256
-
-Q_D_IN = a
-Q_D_OUT = a
-
-# K matrix dimensions
-K_D_IN = a
-K_D_OUT = a
+# Physical array size (measured device: 24×48 physical = 24×24 logical, dual-rail)
+PHYS_ROWS = 24
+PHYS_COLS = 24   # logical cols (physical 48 = pos + neg dual-rail)
 
 # Derived parameters
-Q_READ_MULTIPLIER = RRAM_SENT_LEN * RRAM_SENT_LEN  # 1296
-K_READ_MULTIPLIER = RRAM_SENT_LEN    
+Q_READ_MULTIPLIER = RRAM_SENT_LEN * 72  # 1296
+K_READ_MULTIPLIER = RRAM_SENT_LEN
 
 # ============================================================
 # GPU Architecture
@@ -44,14 +39,14 @@ GPU_NUM_SAMPLES = 872
 # ============================================================
 # ISAAC-based RRAM cell parameters
 V_READ = 0.2              # 200mV
-G_ON = 6.5e-6            # 6.5 μS
-G_OFF = 1.0e-6           # 1.0 μS
+G_ON = 6.5e-6            # 6.5 μS = 1.3e-6 A
+G_OFF = 1.0e-6           # 1.0 μS = 0.2e-6 A
 ADC_RESOLUTION = 7        # 7-bit
 
 # Technology
 TECH_NODE = 65e-9        # 65nm
-#CELL_PITCH = 3e-6        # 3μm
-CELL_PITCH = 30e-6        # 3μm
+CELL_PITCH = 3e-6        # 3μm
+#CELL_PITCH = 30e-6        # 30μm
 
 V_SUPPLY = 1.0           # 1V, ADC나 이런 곳에서는 1.0V로 함.
 
@@ -87,8 +82,8 @@ P_LEAK_CONTROL = 0.5e-6       # 0.5μW
 # ============================================================
 # RRAM Cell Timing
 # ============================================================
-# T_READ = 5e-9  
-T_READ = 120e-6   
+T_READ = 10e-9                 # Ideal read time
+# T_READ = 120e-6             # Real read time
 T_WRITE = 100e-9              # 100ns
 T_PULSE_G = 0                 # Included in T_READ
 T_DRIVER = 0.5e-9             # 0.5ns
@@ -96,7 +91,21 @@ T_DRIVER = 0.5e-9             # 0.5ns
 # ============================================================
 # RC Parameters (for Horowitz)
 # ============================================================
-R_RRAM = 1.0 / G_ON if G_ON > 0 else 154e3  # ~154kΩ  
+# Measured average conductance (24×24 array → 768×768 full matrix, same per-cell stats)
+G_AVG_Q = 5.64245e-7     # W_Q 평균 conductance (S)
+G_AVG_K = 5.644299e-7    # W_K 평균 conductance (S)
+R_RRAM_Q = 1.0 / G_AVG_Q
+R_RRAM_K = 1.0 / G_AVG_K
+
+# Programming variation / tuning error (SW-matched, 24×24 측정, per-cell i.i.d.)
+VARIATION_MEAN_Q =  2.30e-3   # W_Q 평균 오차
+VARIATION_STD_Q  =  2.83e-2   # W_Q 표준편차
+VARIATION_MEAN_K = -2.64e-3   # W_K 평균 오차
+VARIATION_STD_K  =  2.19e-1   # W_K 표준편차
+
+# Legacy average (기존 수식 호환용)
+G_AVG = G_ON * 0.1 + G_OFF * 0.9
+R_RRAM = 1.0 / G_AVG if G_AVG > 0 else 154e3
 C_WORDLINE = 5e-12
 C_RRAM_IN = 1e-12
 C_BITLINE = 12.8e-12 

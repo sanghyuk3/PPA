@@ -103,16 +103,16 @@ class ISAAC_RRAM_PPA:
         self._runtime_cache = None
         self._energy_cache = None
 
-    def get_full_results(self):
+    def get_full_results(self, verbose=True):
         # Calculate all metrics
         latency_result = calculate_overall_latency()
         runtime = latency_result['t_total']
         energy_result = calculate_overall_energy(runtime)
         area_result = calculate_overall_area()
-        
+
         energy = energy_result['E_total']
         mac_ops = energy_result['total_mac_ops']
-        
+
         # Derived metrics
         power = energy / runtime if runtime > 0 else 0
         tops = (mac_ops * 2) / runtime / 1e12 if runtime > 0 else 0  # MAC = 2 OPS
@@ -120,7 +120,7 @@ class ISAAC_RRAM_PPA:
         tops_per_w = tops / power if power > 0 else 0
         tops_per_mm2 = tops / area_mm2 if area_mm2 > 0 else 0
         energy_per_sample = energy / config.RRAM_NUM_SAMPLES
-        
+
         results = {
             'runtime': runtime,
             'energy': energy,
@@ -133,11 +133,13 @@ class ISAAC_RRAM_PPA:
             'energy_per_sample': energy_per_sample,
             'latency_breakdown': latency_result,
             'energy_breakdown': energy_result
-        }   
+        }
 
-        print_latency_breakdown(latency_result)
-        print_energy_breakdown(energy_result)
-        
+        if verbose:
+            print_latency_breakdown(latency_result)
+            print_energy_breakdown(energy_result)
+            self._print_summary(results)
+
         return results
     
     def _print_summary(self, results):
@@ -157,9 +159,43 @@ class ISAAC_RRAM_PPA:
         print("="*80 + "\n")
 
 
+def compute_rram_ppa_for_model(layers, d_model, sent_len, num_samples):
+    """
+    임의의 Transformer 모델에 대해 RRAM PPA 계산.
+    config 전역변수를 임시로 override 후 복구 (try/finally 보장).
+
+    Args:
+        layers     (int): Transformer layer 수
+        d_model    (int): Hidden dimension (Q_D_IN = K_D_IN = Q_D_OUT = K_D_OUT)
+        sent_len   (int): 시퀀스 길이 (RRAM_SENT_LEN)
+        num_samples(int): 평가 샘플 수 (RRAM_NUM_SAMPLES)
+
+    Returns:
+        dict: get_full_results() 반환값과 동일
+    """
+    KEYS = ['RRAM_LAYERS', 'Q_D_IN', 'Q_D_OUT', 'K_D_IN', 'K_D_OUT',
+            'RRAM_SENT_LEN', 'RRAM_NUM_SAMPLES',
+            'Q_READ_MULTIPLIER', 'K_READ_MULTIPLIER']
+    saved = {k: getattr(config, k) for k in KEYS}
+    try:
+        config.RRAM_LAYERS        = layers
+        config.Q_D_IN             = d_model
+        config.Q_D_OUT            = d_model
+        config.K_D_IN             = d_model
+        config.K_D_OUT            = d_model
+        config.RRAM_SENT_LEN      = sent_len
+        config.RRAM_NUM_SAMPLES   = num_samples
+        config.Q_READ_MULTIPLIER  = sent_len * 72
+        config.K_READ_MULTIPLIER  = sent_len
+        return ISAAC_RRAM_PPA().get_full_results(verbose=False)
+    finally:
+        for k, v in saved.items():
+            setattr(config, k, v)
+
+
 if __name__ == "__main__":
     print("Testing ISAAC_RRAM_PPA")
     config.print_config()
-    
+
     ppa = ISAAC_RRAM_PPA()
     results = ppa.get_full_results(verbose=True)

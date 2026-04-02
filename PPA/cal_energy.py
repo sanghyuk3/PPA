@@ -4,7 +4,7 @@ Overall energy calculation integrating RRAM cells and peripherals
 """
 
 import config
-from Cell import calculate_rram_read_energy
+from Cell import calculate_rram_read_energy_gavg
 from perip.perip import calculate_energy_perip
 
 
@@ -29,17 +29,12 @@ def calculate_overall_energy(runtime):
     total_mac_ops = total_q_macs + total_k_macs
     
     # ========================
-    # 1. RRAM Cell Read Energy
+    # 1. RRAM Cell Read Energy (측정된 G_AVG 사용, Q/K 별도 적용)
     # ========================
-    E_rram_cell = calculate_rram_read_energy(
-        config.V_READ, 
-        config.G_ON, 
-        config.G_OFF, 
-        config.T_READ, 
-        sparsity=0.05
-    )
+    E_rram_cell_Q = calculate_rram_read_energy_gavg(config.V_READ, config.G_AVG_Q, config.T_READ)
+    E_rram_cell_K = calculate_rram_read_energy_gavg(config.V_READ, config.G_AVG_K, config.T_READ)
 
-    E_RRAM_total = total_mac_ops * E_rram_cell
+    E_RRAM_total = total_q_macs * E_rram_cell_Q + total_k_macs * E_rram_cell_K
 
     # ========================
     # 2. Peripheral Circuit Energy

@@ -1,0 +1,148 @@
+"""
+glue_eval.py
+BERT RRAM inference accuracy across multiple GLUE tasks.
+Uses textattack fine-tuned BERT-base models from HuggingFace Hub.
+"""
+import torch
+from torch.utils.data import DataLoader
+from datasets import load_dataset
+from transformers import BertTokenizer, AutoModelForSequenceClassification
+
+import config
+from Inference import apply_quantlinear_with_stats
+
+# ============================================================
+# GLUE Task Configs
+# ============================================================
+MAX_LEN = 128   # Standard GLUE max sequence length
+
+GLUE_TASKS = {
+    'sst2': {
+        'dataset': ('glue', 'sst2'),
+        'split':   'validation',
+        'keys':    ('sentence', None),
+        'num_labels': 2,
+        'model':   'textattack/bert-base-uncased-SST-2',
+    },
+    'mrpc': {
+        'dataset': ('glue', 'mrpc'),
+        'split':   'validation',
+        'keys':    ('sentence1', 'sentence2'),
+        'num_labels': 2,
+        'model':   'textattack/bert-base-uncased-MRPC',
+    },
+    'cola': {
+        'dataset': ('glue', 'cola'),
+        'split':   'validation',
+        'keys':    ('sentence', None),
+        'num_labels': 2,
+        'model':   'textattack/bert-base-uncased-CoLA',
+    },
+    'qnli': {
+        'dataset': ('glue', 'qnli'),
+        'split':   'validation',
+        'keys':    ('question', 'sentence'),
+        'num_labels': 2,
+        'model':   'textattack/bert-base-uncased-QNLI',
+    },
+    'rte': {
+        'dataset': ('glue', 'rte'),
+        'split':   'validation',
+        'keys':    ('sentence1', 'sentence2'),
+        'num_labels': 2,
+        'model':   'textattack/bert-base-uncased-RTE',
+    },
+    'mnli': {
+        'dataset': ('glue', 'mnli'),
+        'split':   'validation_matched',
+        'keys':    ('premise', 'hypothesis'),
+        'num_labels': 3,
+        'model':   'textattack/bert-base-uncased-MNLI',
+    },
+    'qqp': {
+        'dataset': ('glue', 'qqp'),
+        'split':   'validation',
+        'keys':    ('question1', 'question2'),
+        'num_labels': 2,
+        'model':   'textattack/bert-base-uncased-QQP',
+    },
+}
+
+
+def _make_loader(task_name, tokenizer, batch_size=64):
+    cfg = GLUE_TASKS[task_name]
+    k1, k2 = cfg['keys']
+    data = load_dataset(*cfg['dataset'])[cfg['split']]
+
+    def encode(batch):
+        if k2 is None:
+            return tokenizer(batch[k1], truncation=True,
+                             padding='max_length', max_length=MAX_LEN)
+        return tokenizer(batch[k1], batch[k2], truncation=True,
+                         padding='max_length', max_length=MAX_LEN)
+
+    enc = data.map(encode, batched=True)
+    enc.set_format(type='torch', columns=['input_ids', 'attention_mask', 'label'])
+
+    def collate(batch):
+        return {
+            'input_ids':      torch.stack([x['input_ids']      for x in batch]),
+            'attention_mask': torch.stack([x['attention_mask'] for x in batch]),
+            'labels':         torch.tensor([x['label']         for x in batch]),
+        }
+
+    return DataLoader(enc, batch_size=batch_size, shuffle=False,
+                      collate_fn=collate), len(data)
+
+
+def evaluate_task(task_name, local_sst2_ckpt=None):
+    """
+    Evaluate one GLUE task with RRAM variation noise applied.
+    Returns (accuracy, num_samples).
+    """
+    import os
+    cfg = GLUE_TASKS[task_name]
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+    # SST-2: 로컬 체크포인트 우선 사용, 나머지는 HuggingFace hub
+    if local_sst2_ckpt and task_name == 'sst2' and os.path.exists(local_sst2_ckpt):
+        from transformers import BertForSequenceClassification
+        model = BertForSequenceClassification.from_pretrained(
+            'bert-base-uncased', num_labels=2)
+        ckpt = torch.load(local_sst2_ckpt, map_location='cpu')
+        sd = (ckpt.get('model_state_dict', ckpt.get('state_dict', ckpt))
+              if isinstance(ckpt, dict) else ckpt)
+        model.load_state_dict(sd, strict=False)
+    else:
+        # AutoModel이 num_labels를 모델 config에서 자동으로 읽음
+        model = AutoModelForSequenceClassification.from_pretrained(cfg['model'])
+
+    apply_quantlinear_with_stats(model)
+    model.eval()
+
+    loader, n_samples = _make_loader(task_name, tokenizer)
+
+    correct, total = 0, 0
+    with torch.no_grad():
+        for batch in loader:
+            out = model(**batch)
+            preds = out.logits.argmax(dim=-1)
+            correct += (preds == batch['labels']).sum().item()
+            total += batch['labels'].size(0)
+
+    return correct / total, n_samples
+
+
+def run_all_glue(local_sst2_ckpt=None):
+    """Run all GLUE tasks. Returns dict: task → {accuracy, num_samples}."""
+    results = {}
+    for task in GLUE_TASKS:
+        print(f"  [{task.upper():5s}] evaluating...", end=' ', flush=True)
+        try:
+            acc, n = evaluate_task(task, local_sst2_ckpt=local_sst2_ckpt)
+            results[task] = {'accuracy': acc, 'num_samples': n}
+            print(f"acc={acc*100:.2f}%  (n={n})")
+        except Exception as e:
+            print(f"FAILED: {e}")
+            results[task] = {'accuracy': None, 'num_samples': 0}
+    return results

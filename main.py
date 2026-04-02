@@ -10,10 +10,14 @@ import warnings
 import config
 from datasets import load_dataset
 from transformers import AlbertTokenizer, AlbertForSequenceClassification
+from transformers import BertTokenizer, BertForSequenceClassification
 from Inference import apply_quantlinear_with_stats
-from param import ISAAC_RRAM_PPA
+from param import ISAAC_RRAM_PPA, compute_rram_ppa_for_model
 from evaluation import evaluate_with_ppa
 from GPU.GPU import calculate_gpu_qkt_operation
+from conventional_rram import calculate_conventional_rram_ppa, print_conventional_rram_summary
+from glue_eval import run_all_glue, GLUE_TASKS, MAX_LEN
+from gpt_ppa import run_gpt_ppa_comparison, print_gpt_comparison
 
 # ============================================================
 # Environment Variables
@@ -31,11 +35,13 @@ if __name__ == "__main__":
     # 1. Model Setup
     # ============================================================
     print("\n📦 Loading model...")
-    tokenizer = AlbertTokenizer.from_pretrained("albert-base-v2")
-    model = AlbertForSequenceClassification.from_pretrained("albert-base-v2", num_labels=2)
+#     tokenizer = AlbertTokenizer.from_pretrained("albert-base-v2")
+#     model = AlbertForSequenceClassification.from_pretrained("albert-base-v2", num_labels=2)
     
+    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+    model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
     # Load checkpoint
-    best_model_path = r"C:\Users\kimsanghyuk\Documents\sanghyuk\best_model_case2.pt"
+    best_model_path = r"C:\Users\kimsanghyuk\Documents\sanghyuk\W4A8_BERT_best_acc0.9174.pt"
     if os.path.exists(best_model_path):
         checkpoint = torch.load(best_model_path, map_location="cpu")
         if isinstance(checkpoint, dict):
@@ -91,58 +97,142 @@ if __name__ == "__main__":
     print(f"Accuracy: {eval_results['accuracy']:.4f} ({eval_results['accuracy']*100:.2f}%)")
     
     # ============================================================
-    # 6. Comparison Table
+    # 6. Conventional RRAM (KT write) PPA
+    # ============================================================
+    print("\n" + "="*80)
+    print("Conventional RRAM (KT Write) PPA Calculation")
+    print("="*80)
+    conv_rram_results = calculate_conventional_rram_ppa()
+    print_conventional_rram_summary(conv_rram_results)
+
+    # ============================================================
+    # 7. Comparison Table
     # ============================================================
     gpu_results = calculate_gpu_qkt_operation()
-    print("\n" + "="*150)
+    W = 22  # column width
+    print("\n" + "="*170)
     print("PPA Comparison Table")
-    print("="*150)
-    print(f"{'Metric':<25} {'RRAM':<20} {'V100':<20} {'A100':<20} {'H100':<20} {'RTX3090':<20} {'RTX4090':<20} ")
-    print("-"*150)
-    
+    print("="*170)
+    print(f"{'Metric':<25} {'ISAAC RRAM':<{W}} {'Conv. RRAM(KT)':<{W}} {'V100':<{W}} {'A100':<{W}} {'H100':<{W}} {'RTX3090':<{W}} {'RTX4090':<{W}}")
+    print("-"*170)
+
     print(f"{'Runtime (ms)':<25} "
-          f"{rram_results['runtime']*1e3:<20.3f} "
-          f"{gpu_results['V100']['total_runtime']*1e3:<20.3f} "
-          f"{gpu_results['A100']['total_runtime']*1e3:<20.3f} "
-          f"{gpu_results['H100']['total_runtime']*1e3:<20.3f} "
-          f"{gpu_results['RTX_3090']['total_runtime']*1e3:<20.3f} "
-          f"{gpu_results['RTX_4090']['total_runtime']*1e3:<20.3f} "
+          f"{rram_results['runtime']*1e3:<{W}.3f} "
+          f"{conv_rram_results['runtime']*1e3:<{W}.3f} "
+          f"{gpu_results['V100']['total_runtime']*1e3:<{W}.3f} "
+          f"{gpu_results['A100']['total_runtime']*1e3:<{W}.3f} "
+          f"{gpu_results['H100']['total_runtime']*1e3:<{W}.3f} "
+          f"{gpu_results['RTX_3090']['total_runtime']*1e3:<{W}.3f} "
+          f"{gpu_results['RTX_4090']['total_runtime']*1e3:<{W}.3f}"
           )
-    
+
+    print(f"{'  (write ms)':<25} "
+          f"{'N/A':<{W}} "
+          f"{conv_rram_results['T_write']*1e3:<{W}.3f} "
+          f"{'N/A':<{W}} {'N/A':<{W}} {'N/A':<{W}} {'N/A':<{W}} {'N/A':<{W}}"
+          )
+
     print(f"{'Energy (mJ)':<25} "
-          f"{rram_results['energy']*1e3:<20.6f} "
-          f"{gpu_results['V100']['total_energy']*1e3:<20.3f} "
-          f"{gpu_results['A100']['total_energy']*1e3:<20.3f} "
-          f"{gpu_results['H100']['total_energy']*1e3:<20.3f}"
-          f"{gpu_results['RTX_3090']['total_energy']*1e3:<20.3f} "
-          f"{gpu_results['RTX_4090']['total_energy']*1e3:<20.3f} "
+          f"{rram_results['energy']*1e3:<{W}.4f} "
+          f"{conv_rram_results['energy']*1e3:<{W}.4f} "
+          f"{gpu_results['V100']['total_energy']*1e3:<{W}.3f} "
+          f"{gpu_results['A100']['total_energy']*1e3:<{W}.3f} "
+          f"{gpu_results['H100']['total_energy']*1e3:<{W}.3f} "
+          f"{gpu_results['RTX_3090']['total_energy']*1e3:<{W}.3f} "
+          f"{gpu_results['RTX_4090']['total_energy']*1e3:<{W}.3f}"
           )
-    
-    # print(f"{'Power (W)':<25} "
-    #       f"{rram_results['power']:<20.6f} "
-    #       f"{gpu_results['V100']['power']:<20.6f} "
-    #       f"{gpu_results['A100']['power']:<20.6f} "
-    #       f"{gpu_results['H100']['power']:<20.6f}"
-    #       f"{gpu_results['RTX_3090']['power']:<20.6f} "
-    #       f"{gpu_results['RTX_4090']['power']:<20.6f} "
-    #       )
-    
-    # print(f"{'TOPS/W':<25} "
-    #       f"{rram_results['TOPS_per_W']:<20.4f} "
-    #       f"{gpu_results['V100']['TOPS_per_W']:<20.4f} "
-    #       f"{gpu_results['A100']['TOPS_per_W']:<20.4f} "
-    #       f"{gpu_results['H100']['TOPS_per_W']:<20.4f}"
-    #       f"{gpu_results['RTX_3090']['TOPS_per_W']:<20.4f} "
-    #       f"{gpu_results['RTX_4090']['TOPS_per_W']:<20.4f} "
-    #       )
-    
+
+    print(f"{'  (write mJ)':<25} "
+          f"{'N/A':<{W}} "
+          f"{conv_rram_results['E_write']*1e3:<{W}.4f} "
+          f"{'N/A':<{W}} {'N/A':<{W}} {'N/A':<{W}} {'N/A':<{W}} {'N/A':<{W}}"
+          )
+
+    print(f"{'TOPS':<25} "
+          f"{rram_results['TOPS']:<{W}.4f} "
+          f"{conv_rram_results['TOPS']:<{W}.4f} "
+          f"{gpu_results['V100']['TOPS']:<{W}.4f} "
+          f"{gpu_results['A100']['TOPS']:<{W}.4f} "
+          f"{gpu_results['H100']['TOPS']:<{W}.4f} "
+          f"{gpu_results['RTX_3090']['TOPS']:<{W}.4f} "
+          f"{gpu_results['RTX_4090']['TOPS']:<{W}.4f}"
+          )
+
+    print(f"{'TOPS/W':<25} "
+          f"{rram_results['TOPS_per_W']:<{W}.4f} "
+          f"{conv_rram_results['TOPS_per_W']:<{W}.4f} "
+          f"{gpu_results['V100']['TOPS_per_W']:<{W}.4f} "
+          f"{gpu_results['A100']['TOPS_per_W']:<{W}.4f} "
+          f"{gpu_results['H100']['TOPS_per_W']:<{W}.4f} "
+          f"{gpu_results['RTX_3090']['TOPS_per_W']:<{W}.4f} "
+          f"{gpu_results['RTX_4090']['TOPS_per_W']:<{W}.4f}"
+          )
+
     print(f"{'Area (mm2)':<25} "
-          f"{rram_results['area']:<20.4f} "
-          f"{gpu_results['V100']['area']:<20.4f} "
-          f"{gpu_results['A100']['area']:<20.1f} "
-          f"{gpu_results['H100']['area']:<20.1f}"
-          f"{gpu_results['RTX_3090']['area']:<20.1f} "
-          f"{gpu_results['RTX_4090']['area']:<20.1f} "
+          f"{rram_results['area']:<{W}.4f} "
+          f"{conv_rram_results['area']:<{W}.4f} "
+          f"{gpu_results['V100']['area']:<{W}.4f} "
+          f"{gpu_results['A100']['area']:<{W}.1f} "
+          f"{gpu_results['H100']['area']:<{W}.1f} "
+          f"{gpu_results['RTX_3090']['area']:<{W}.1f} "
+          f"{gpu_results['RTX_4090']['area']:<{W}.1f}"
           )
-    
-    print("="*150 + "\n")
+
+    print(f"{'TOPS/mm2':<25} "
+          f"{rram_results['TOPS_per_mm2']:<{W}.4f} "
+          f"{conv_rram_results['TOPS_per_mm2']:<{W}.4f} "
+          f"{gpu_results['V100']['TOPS_per_mm2']:<{W}.4f} "
+          f"{gpu_results['A100']['TOPS_per_mm2']:<{W}.4f} "
+          f"{gpu_results['H100']['TOPS_per_mm2']:<{W}.4f} "
+          f"{gpu_results['RTX_3090']['TOPS_per_mm2']:<{W}.4f} "
+          f"{gpu_results['RTX_4090']['TOPS_per_mm2']:<{W}.4f}"
+          )
+
+    print("="*170 + "\n")
+
+    # ============================================================
+    # 8. Multi-GLUE Evaluation (BERT + RRAM variation)
+    # ============================================================
+    print("\n" + "="*80)
+    print("Multi-GLUE Evaluation (BERT-base + RRAM variation)")
+    print("="*80)
+    glue_results = run_all_glue(local_sst2_ckpt=best_model_path)
+
+    # 각 task별 PPA: 동일 BERT 모델, task마다 sample 수만 다름
+    glue_ppa = {}
+    for task, gres in glue_results.items():
+        n = gres['num_samples']
+        if n > 0:
+            glue_ppa[task] = compute_rram_ppa_for_model(
+                layers=12, d_model=768, sent_len=MAX_LEN, num_samples=n
+            )
+
+    W2 = 14
+    print("\n" + "="*100)
+    print(f"GLUE Summary  (BERT-base RRAM, seq_len={MAX_LEN})")
+    print("="*100)
+    print(f"{'Task':<8} {'n_val':<7} {'Accuracy':<12} "
+          f"{'Runtime(ms)':<{W2}} {'Energy(mJ)':<{W2}} "
+          f"{'TOPS':<{W2}} {'TOPS/W':<{W2}}")
+    print("-"*100)
+    for task in GLUE_TASKS:
+        g = glue_results[task]
+        p = glue_ppa.get(task)
+        acc_str = f"{g['accuracy']*100:.2f}%" if g['accuracy'] is not None else "N/A"
+        if p:
+            print(f"{task.upper():<8} {g['num_samples']:<7} {acc_str:<12} "
+                  f"{p['runtime']*1e3:<{W2}.3f} {p['energy']*1e3:<{W2}.4f} "
+                  f"{p['TOPS']:<{W2}.4f} {p['TOPS_per_W']:<{W2}.4f}")
+        else:
+            print(f"{task.upper():<8} {g['num_samples']:<7} {acc_str:<12} "
+                  f"{'N/A':<{W2}} {'N/A':<{W2}} {'N/A':<{W2}} {'N/A':<{W2}}")
+    print("="*100)
+
+    # ============================================================
+    # 9. GPT-2 RRAM PPA vs GPU Comparison
+    # ============================================================
+    print("\n" + "="*80)
+    print("GPT-2 RRAM PPA vs GPU Comparison")
+    print("="*80)
+    gpt_results = run_gpt_ppa_comparison()
+    print_gpt_comparison(gpt_results)

@@ -1,14 +1,30 @@
 import config
 
 def calculate_gpu_qkt_operation():
-    """Calculate PPA for all GPUs"""
+    """Calculate PPA for all GPUs (uses current config globals)."""
     gpu_list = ['V100', 'A100', 'H100', 'RTX_4090', 'RTX_3090']
-    results = {}
-    
-    for gpu_name in gpu_list:
-        results[gpu_name] = _calculate_single_gpu(gpu_name)
-    
-    return results
+    return {g: _calculate_single_gpu(g) for g in gpu_list}
+
+
+def calculate_gpu_ppa_for_model(layers, d_model, sent_len, num_samples):
+    """
+    임의의 Transformer 모델에 대해 모든 GPU의 PPA 계산.
+    config 전역변수를 임시 override 후 복구.
+
+    Returns:
+        dict[gpu_name] = _calculate_single_gpu() 결과
+    """
+    KEYS = ['GPU_NUM_LAYERS', 'GPU_D_MODEL', 'GPU_MAX_SENT_LEN', 'GPU_NUM_SAMPLES']
+    saved = {k: getattr(config, k) for k in KEYS}
+    try:
+        config.GPU_NUM_LAYERS   = layers
+        config.GPU_D_MODEL      = d_model
+        config.GPU_MAX_SENT_LEN = sent_len
+        config.GPU_NUM_SAMPLES  = num_samples
+        return calculate_gpu_qkt_operation()
+    finally:
+        for k, v in saved.items():
+            setattr(config, k, v)
 
 def _calculate_single_gpu(gpu_name):
 
