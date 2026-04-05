@@ -57,7 +57,7 @@ if __name__ == "__main__":
     
     # Apply quantization + move to GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    quant_layers = apply_quantlinear_with_stats(model)
+    quant_layers = apply_quantlinear_with_stats(model, force_no_bias=True)
     model.to(device)
     model.eval()
     
