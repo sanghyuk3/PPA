@@ -20,6 +20,7 @@ def _find(candidates):
 
 SST2_CKPT = _find([
     r"C:\Users\kimsanghyuk\Documents\sanghyuk\W4A8_BERT_best_acc0.9174.pt",
+    "/content/PPA/W4A8_BERT_best_acc0.9174.pt",
     "/content/W4A8_BERT_best_acc0.9174.pt",
     "/drive/MyDrive/W4A8_BERT_best_acc0.9174.pt",
 ])

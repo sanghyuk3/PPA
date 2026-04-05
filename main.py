@@ -43,6 +43,7 @@ if __name__ == "__main__":
     # Load checkpoint
     _candidates = [
         r"C:\Users\kimsanghyuk\Documents\sanghyuk\W4A8_BERT_best_acc0.9174.pt",
+        "/content/PPA/W4A8_BERT_best_acc0.9174.pt",
         "/content/W4A8_BERT_best_acc0.9174.pt",
         "/drive/MyDrive/W4A8_BERT_best_acc0.9174.pt",
     ]
