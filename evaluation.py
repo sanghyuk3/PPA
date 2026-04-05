@@ -2,7 +2,7 @@ import config
 import torch
 
 def evaluate_with_ppa(model, loader, rram_results):
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model.eval()
     correct, total = 0, 0

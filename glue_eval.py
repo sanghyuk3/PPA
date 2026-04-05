@@ -1,7 +1,12 @@
 """
 glue_eval.py
 BERT RRAM inference accuracy across multiple GLUE tasks.
-Uses textattack fine-tuned BERT-base models from HuggingFace Hub.
+
+모든 task에 동일하게 적용:
+  - W4A8 inference quantization (Inference.py의 quantize_weight_4bit / quantize_activation_8bit)
+  - 동일 RRAM hardware variation (config.VARIATION_* 통계, 1회 고정 샘플링)
+  - bias = None (SST-2 학습 조건과 통일)
+  - GPU 사용 (Colab 기준)
 """
 import torch
 from torch.utils.data import DataLoader
@@ -11,11 +16,12 @@ from transformers import BertTokenizer, AutoModelForSequenceClassification
 import config
 from Inference import apply_quantlinear_with_stats
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MAX_LEN = 128
+
 # ============================================================
 # GLUE Task Configs
 # ============================================================
-MAX_LEN = 128   # Standard GLUE max sequence length
-
 GLUE_TASKS = {
     'sst2': {
         'dataset': ('glue', 'sst2'),
@@ -69,7 +75,7 @@ GLUE_TASKS = {
 }
 
 
-def _make_loader(task_name, tokenizer, batch_size=64):
+def _make_loader(task_name, tokenizer, batch_size=128):
     cfg = GLUE_TASKS[task_name]
     k1, k2 = cfg['keys']
     data = load_dataset(*cfg['dataset'])[cfg['split']]
@@ -97,14 +103,15 @@ def _make_loader(task_name, tokenizer, batch_size=64):
 
 def evaluate_task(task_name, local_sst2_ckpt=None):
     """
-    Evaluate one GLUE task with RRAM variation noise applied.
+    하나의 GLUE task 평가.
+    모든 task에 W4A8 quantization + RRAM variation 동일 적용.
     Returns (accuracy, num_samples).
     """
     import os
     cfg = GLUE_TASKS[task_name]
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-    # SST-2: 로컬 체크포인트 우선 사용, 나머지는 HuggingFace hub
+    # SST-2: 로컬 체크포인트 우선 / 나머지: HuggingFace hub
     if local_sst2_ckpt and task_name == 'sst2' and os.path.exists(local_sst2_ckpt):
         from transformers import BertForSequenceClassification
         model = BertForSequenceClassification.from_pretrained(
@@ -114,10 +121,12 @@ def evaluate_task(task_name, local_sst2_ckpt=None):
               if isinstance(ckpt, dict) else ckpt)
         model.load_state_dict(sd, strict=False)
     else:
-        # AutoModel이 num_labels를 모델 config에서 자동으로 읽음
         model = AutoModelForSequenceClassification.from_pretrained(cfg['model'])
 
+    # W4A8 quantization + RRAM variation (Q/K) + bias=None 적용
+    # → 모든 task 동일 조건 (같은 RRAM 하드웨어 가정)
     apply_quantlinear_with_stats(model)
+    model.to(DEVICE)
     model.eval()
 
     loader, n_samples = _make_loader(task_name, tokenizer)
@@ -125,6 +134,7 @@ def evaluate_task(task_name, local_sst2_ckpt=None):
     correct, total = 0, 0
     with torch.no_grad():
         for batch in loader:
+            batch = {k: v.to(DEVICE) for k, v in batch.items()}
             out = model(**batch)
             preds = out.logits.argmax(dim=-1)
             correct += (preds == batch['labels']).sum().item()
@@ -134,7 +144,8 @@ def evaluate_task(task_name, local_sst2_ckpt=None):
 
 
 def run_all_glue(local_sst2_ckpt=None):
-    """Run all GLUE tasks. Returns dict: task → {accuracy, num_samples}."""
+    """전체 GLUE task 실행. Returns dict: task → {accuracy, num_samples}."""
+    print(f"Device: {DEVICE}")
     results = {}
     for task in GLUE_TASKS:
         print(f"  [{task.upper():5s}] evaluating...", end=' ', flush=True)

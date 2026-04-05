@@ -50,8 +50,10 @@ if __name__ == "__main__":
             state_dict = checkpoint
         model.load_state_dict(state_dict, strict=False)
     
-    # Apply quantization
+    # Apply quantization + move to GPU
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     quant_layers = apply_quantlinear_with_stats(model)
+    model.to(device)
     model.eval()
     
     # ============================================================
@@ -61,8 +63,8 @@ if __name__ == "__main__":
     dataset = load_dataset("glue", "sst2")
     
     def encode(batch):
-        return tokenizer(batch["sentence"], truncation=True, 
-                        padding="max_length", max_length=config.RRAM_SENT_LEN)
+        return tokenizer(batch["sentence"], truncation=True,
+                        padding="max_length", max_length=128)
     
     encoded = dataset["validation"].map(encode, batched=True)
     encoded.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
