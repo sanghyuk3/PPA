@@ -16,23 +16,23 @@ import config
 # ============================================================
 def quantize_weight_4bit(w):
     """
-    Symmetric per-output-channel 4-bit quantization.
-    Range: [-8, 7], dequantized back to float.
+    Symmetric per-tensor 4-bit quantization. Matches WeightQuantSTE in training.
+    Range: [-7, 7], dequantized back to float.
     """
-    max_val = w.abs().max(dim=1, keepdim=True)[0].clamp(min=1e-8)
-    scale = max_val / 7.0
-    q = (w / scale).round().clamp(-8, 7)
+    max_abs = w.abs().max().clamp(min=1e-8)  # per-tensor (not per-channel)
+    scale = max_abs / 7.0
+    q = (w / scale).round().clamp(-7, 7)
     return q * scale
 
 
 def quantize_activation_8bit(x):
     """
-    Symmetric per-tensor 8-bit activation quantization.
-    Range: [-128, 127], dequantized back to float.
+    Symmetric per-tensor 8-bit activation quantization. Matches ActQuantSTE in training.
+    Range: [-127, 127], dequantized back to float.
     """
-    max_val = x.abs().max().clamp(min=1e-8)
-    scale = max_val / 127.0
-    q = (x / scale).round().clamp(-128, 127)
+    max_abs = x.abs().max().clamp(min=1e-8)
+    scale = max_abs / 127.0
+    q = (x / scale).round().clamp(-127, 127)
     return q * scale
 
 
