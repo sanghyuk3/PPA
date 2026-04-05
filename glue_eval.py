@@ -37,40 +37,12 @@ GLUE_TASKS = {
         'num_labels': 2,
         'model':   'textattack/bert-base-uncased-MRPC',
     },
-    'cola': {
-        'dataset': ('glue', 'cola'),
-        'split':   'validation',
-        'keys':    ('sentence', None),
-        'num_labels': 2,
-        'model':   'textattack/bert-base-uncased-CoLA',
-    },
-    'qnli': {
-        'dataset': ('glue', 'qnli'),
-        'split':   'validation',
-        'keys':    ('question', 'sentence'),
-        'num_labels': 2,
-        'model':   'textattack/bert-base-uncased-QNLI',
-    },
-    'rte': {
-        'dataset': ('glue', 'rte'),
-        'split':   'validation',
-        'keys':    ('sentence1', 'sentence2'),
-        'num_labels': 2,
-        'model':   'textattack/bert-base-uncased-RTE',
-    },
     'mnli': {
         'dataset': ('glue', 'mnli'),
         'split':   'validation_matched',
         'keys':    ('premise', 'hypothesis'),
         'num_labels': 3,
         'model':   'textattack/bert-base-uncased-MNLI',
-    },
-    'qqp': {
-        'dataset': ('glue', 'qqp'),
-        'split':   'validation',
-        'keys':    ('question1', 'question2'),
-        'num_labels': 2,
-        'model':   'textattack/bert-base-uncased-QQP',
     },
 }
 
