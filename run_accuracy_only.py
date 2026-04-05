@@ -15,7 +15,12 @@ from glue_eval import run_all_glue, GLUE_TASKS, DEVICE
 # ============================================================
 # 로컬 SST-2 체크포인트 경로 (없으면 HuggingFace hub 사용)
 # ============================================================
-SST2_CKPT = r"C:\Users\kimsanghyuk\Documents\sanghyuk\W4A8_BERT_best_acc0.9174.pt"
+_candidates = [
+    r"C:\Users\kimsanghyuk\Documents\sanghyuk\W4A8_BERT_best_acc0.9174.pt",
+    "/content/W4A8_BERT_best_acc0.9174.pt",
+    "/drive/MyDrive/W4A8_BERT_best_acc0.9174.pt",
+]
+SST2_CKPT = next((p for p in _candidates if os.path.exists(p)), _candidates[0])
 
 if __name__ == "__main__":
     print(f"\nDevice : {DEVICE}")

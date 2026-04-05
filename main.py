@@ -41,7 +41,12 @@ if __name__ == "__main__":
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     model = BertForSequenceClassification.from_pretrained("bert-base-uncased", num_labels=2)
     # Load checkpoint
-    best_model_path = r"C:\Users\kimsanghyuk\Documents\sanghyuk\W4A8_BERT_best_acc0.9174.pt"
+    _candidates = [
+        r"C:\Users\kimsanghyuk\Documents\sanghyuk\W4A8_BERT_best_acc0.9174.pt",
+        "/content/W4A8_BERT_best_acc0.9174.pt",
+        "/drive/MyDrive/W4A8_BERT_best_acc0.9174.pt",
+    ]
+    best_model_path = next((p for p in _candidates if os.path.exists(p)), _candidates[0])
     if os.path.exists(best_model_path):
         checkpoint = torch.load(best_model_path, map_location="cpu")
         if isinstance(checkpoint, dict):
