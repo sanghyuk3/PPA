@@ -101,34 +101,38 @@ def _make_loader(task_name, tokenizer, batch_size=128):
                       collate_fn=collate), len(data)
 
 
-def evaluate_task(task_name, local_sst2_ckpt=None):
+def evaluate_task(task_name, local_sst2_ckpt=None, local_ckpts=None):
     """
     하나의 GLUE task 평가.
     모든 task에 W4A8 quantization + RRAM variation 동일 적용.
+    local_ckpts: dict {task_name: ckpt_path} for W4A8 QAT checkpoints
     Returns (accuracy, num_samples).
     """
     import os
     cfg = GLUE_TASKS[task_name]
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-    # SST-2: 로컬 체크포인트 우선 / 나머지: HuggingFace hub
-    if local_sst2_ckpt and task_name == 'sst2' and os.path.exists(local_sst2_ckpt):
+    # W4A8 QAT 로컬 checkpoint 우선, 없으면 HuggingFace hub
+    local_ckpt = None
+    if task_name == 'sst2' and local_sst2_ckpt and os.path.exists(local_sst2_ckpt):
+        local_ckpt = local_sst2_ckpt
+    elif local_ckpts and task_name in local_ckpts and os.path.exists(local_ckpts[task_name]):
+        local_ckpt = local_ckpts[task_name]
+
+    if local_ckpt:
         from transformers import BertForSequenceClassification
         model = BertForSequenceClassification.from_pretrained(
-            'bert-base-uncased', num_labels=2)
-        ckpt = torch.load(local_sst2_ckpt, map_location='cpu')
-        sd = (ckpt.get('model_state_dict', ckpt.get('state_dict', ckpt))
-              if isinstance(ckpt, dict) else ckpt)
+            'bert-base-uncased', num_labels=cfg['num_labels'])
+        sd = torch.load(local_ckpt, map_location='cpu')
+        if isinstance(sd, dict) and 'model_state_dict' in sd:
+            sd = sd['model_state_dict']
         model.load_state_dict(sd, strict=False)
+        force_no_bias = True  # W4A8 QAT 학습 시 bias=None
     else:
         model = AutoModelForSequenceClassification.from_pretrained(cfg['model'])
+        force_no_bias = False  # textattack FP32 모델은 bias 유지
 
-    # W4A8 quantization + RRAM variation (Q/K) 적용
-    # SST-2 W4A8 checkpoint: bias=None으로 학습됨 → force_no_bias=True
-    # textattack 모델: bias 있음 → 그대로 유지
-    no_bias = (task_name == 'sst2' and local_sst2_ckpt is not None
-               and os.path.exists(local_sst2_ckpt))
-    apply_quantlinear_with_stats(model, force_no_bias=no_bias)
+    apply_quantlinear_with_stats(model, force_no_bias=force_no_bias)
     model.to(DEVICE)
     model.eval()
 
@@ -146,14 +150,17 @@ def evaluate_task(task_name, local_sst2_ckpt=None):
     return correct / total, n_samples
 
 
-def run_all_glue(local_sst2_ckpt=None):
-    """전체 GLUE task 실행. Returns dict: task → {accuracy, num_samples}."""
+def run_all_glue(local_sst2_ckpt=None, local_ckpts=None):
+    """전체 GLUE task 실행. Returns dict: task → {accuracy, num_samples}.
+    local_ckpts: dict {task_name: ckpt_path} for W4A8 QAT checkpoints
+    """
     print(f"Device: {DEVICE}")
     results = {}
     for task in GLUE_TASKS:
         print(f"  [{task.upper():5s}] evaluating...", end=' ', flush=True)
         try:
-            acc, n = evaluate_task(task, local_sst2_ckpt=local_sst2_ckpt)
+            acc, n = evaluate_task(task, local_sst2_ckpt=local_sst2_ckpt,
+                                   local_ckpts=local_ckpts)
             results[task] = {'accuracy': acc, 'num_samples': n}
             print(f"acc={acc*100:.2f}%  (n={n})")
         except Exception as e:

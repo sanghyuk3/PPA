@@ -203,7 +203,15 @@ if __name__ == "__main__":
     print("\n" + "="*80)
     print("Multi-GLUE Evaluation (BERT-base + RRAM variation)")
     print("="*80)
-    glue_results = run_all_glue(local_sst2_ckpt=best_model_path)
+    # W4A8 QAT checkpoints (train_glue_w4a8.py로 학습한 결과)
+    _base = os.path.dirname(os.path.abspath(__file__))
+    local_ckpts = {}
+    for task, fname in [('mrpc', 'W4A8_MRPC_best.pt'), ('mnli', 'W4A8_MNLI_best.pt')]:
+        p = os.path.join(_base, fname)
+        if os.path.exists(p):
+            local_ckpts[task] = p
+
+    glue_results = run_all_glue(local_sst2_ckpt=best_model_path, local_ckpts=local_ckpts)
 
     # 각 task별 PPA: 동일 BERT 모델, task마다 sample 수만 다름
     glue_ppa = {}
