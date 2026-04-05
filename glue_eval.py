@@ -112,15 +112,21 @@ def evaluate_task(task_name, local_sst2_ckpt=None, local_ckpts=None):
     cfg = GLUE_TASKS[task_name]
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
-    # W4A8 QAT 로컬 checkpoint 우선, 없으면 HuggingFace hub
+    # W4A8 QAT 로컬 checkpoint 사용
+    # SST-2: local_sst2_ckpt 필수 (없으면 에러)
+    # MRPC/MNLI 등: local_ckpts에서 찾음, 없으면 textattack FP32 fallback
+    from transformers import BertForSequenceClassification
     local_ckpt = None
-    if task_name == 'sst2' and local_sst2_ckpt and os.path.exists(local_sst2_ckpt):
+    if task_name == 'sst2':
+        if not local_sst2_ckpt or not os.path.exists(local_sst2_ckpt):
+            raise FileNotFoundError(
+                f"SST-2 W4A8 checkpoint not found: {local_sst2_ckpt}\n"
+                "Upload W4A8_BERT_best_acc0.9174.pt to /content/ on Colab.")
         local_ckpt = local_sst2_ckpt
     elif local_ckpts and task_name in local_ckpts and os.path.exists(local_ckpts[task_name]):
         local_ckpt = local_ckpts[task_name]
 
     if local_ckpt:
-        from transformers import BertForSequenceClassification
         model = BertForSequenceClassification.from_pretrained(
             'bert-base-uncased', num_labels=cfg['num_labels'])
         sd = torch.load(local_ckpt, map_location='cpu')
