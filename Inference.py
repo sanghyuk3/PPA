@@ -47,7 +47,12 @@ class QuantLinearWithStats(nn.Module):
         self.layer_name   = layer_name
 
         self.weight = nn.Parameter(old_layer.weight.data.clone())
-        self.bias = None  # RRAM 아키텍처에서 bias 미사용 (의도적)
+        # SST-2 checkpoint는 bias=None으로 학습됨 → None 유지
+        # textattack 등 bias 있는 모델은 그대로 가져옴
+        if old_layer.bias is not None:
+            self.bias = nn.Parameter(old_layer.bias.data.clone())
+        else:
+            self.bias = None
 
         # RRAM 프로그래밍 오차 (칩 제작 시 1회 고정)
         # Q/K path만 RRAM variation 적용, V는 zero noise
