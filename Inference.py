@@ -40,19 +40,17 @@ def quantize_activation_8bit(x):
 # QuantLinear: W4A8 + RRAM Variation
 # ============================================================
 class QuantLinearWithStats(nn.Module):
-    def __init__(self, old_layer, layer_name=""):
+    def __init__(self, old_layer, layer_name="", force_no_bias=False):
         super().__init__()
         self.in_features  = old_layer.in_features
         self.out_features = old_layer.out_features
         self.layer_name   = layer_name
 
         self.weight = nn.Parameter(old_layer.weight.data.clone())
-        # SST-2 checkpoint는 bias=None으로 학습됨 → None 유지
-        # textattack 등 bias 있는 모델은 그대로 가져옴
-        if old_layer.bias is not None:
-            self.bias = nn.Parameter(old_layer.bias.data.clone())
-        else:
+        if force_no_bias or old_layer.bias is None:
             self.bias = None
+        else:
+            self.bias = nn.Parameter(old_layer.bias.data.clone())
 
         # RRAM 프로그래밍 오차 (칩 제작 시 1회 고정)
         # Q/K path만 RRAM variation 적용, V는 zero noise
@@ -77,7 +75,7 @@ class QuantLinearWithStats(nn.Module):
 # ============================================================
 # Apply Quantization (BERT / ALBERT 공통 지원)
 # ============================================================
-def apply_quantlinear_with_stats(model):
+def apply_quantlinear_with_stats(model, force_no_bias=False):
     quant_layers = []
 
     if hasattr(model, 'bert'):
@@ -85,7 +83,8 @@ def apply_quantlinear_with_stats(model):
             attn = layer.attention.self
             for name in ["query", "key", "value"]:
                 old_linear = getattr(attn, name)
-                ql = QuantLinearWithStats(old_linear, layer_name=name)
+                ql = QuantLinearWithStats(old_linear, layer_name=name,
+                                         force_no_bias=force_no_bias)
                 setattr(attn, name, ql)
                 quant_layers.append(ql)
 
@@ -95,7 +94,8 @@ def apply_quantlinear_with_stats(model):
                 attn = albert_layer.attention
                 for name in ["query", "key", "value"]:
                     old_linear = getattr(attn, name)
-                    ql = QuantLinearWithStats(old_linear, layer_name=name)
+                    ql = QuantLinearWithStats(old_linear, layer_name=name,
+                                             force_no_bias=force_no_bias)
                     setattr(attn, name, ql)
                     quant_layers.append(ql)
 

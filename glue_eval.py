@@ -123,9 +123,12 @@ def evaluate_task(task_name, local_sst2_ckpt=None):
     else:
         model = AutoModelForSequenceClassification.from_pretrained(cfg['model'])
 
-    # W4A8 quantization + RRAM variation (Q/K) + bias=None 적용
-    # → 모든 task 동일 조건 (같은 RRAM 하드웨어 가정)
-    apply_quantlinear_with_stats(model)
+    # W4A8 quantization + RRAM variation (Q/K) 적용
+    # SST-2 W4A8 checkpoint: bias=None으로 학습됨 → force_no_bias=True
+    # textattack 모델: bias 있음 → 그대로 유지
+    no_bias = (task_name == 'sst2' and local_sst2_ckpt is not None
+               and os.path.exists(local_sst2_ckpt))
+    apply_quantlinear_with_stats(model, force_no_bias=no_bias)
     model.to(DEVICE)
     model.eval()
 
