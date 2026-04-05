@@ -199,16 +199,26 @@ if __name__ == "__main__":
     print("="*170 + "\n")
 
     # ============================================================
-    # 8. Multi-GLUE Evaluation (BERT + RRAM variation)
+    # 8. Multi-GLUE Training (없을 때만) + Evaluation
     # ============================================================
     print("\n" + "="*80)
     print("Multi-GLUE Evaluation (BERT-base + RRAM variation)")
     print("="*80)
-    # W4A8 QAT checkpoints (train_glue_w4a8.py로 학습한 결과)
+    from train_glue_w4a8 import train as train_glue
+
     _base = os.path.dirname(os.path.abspath(__file__))
     local_ckpts = {}
     for task, fname in [('mrpc', 'W4A8_MRPC_best.pt'), ('mnli', 'W4A8_MNLI_best.pt')]:
         p = os.path.join(_base, fname)
+        if not os.path.exists(p):
+            print(f"\n[{task.upper()}] checkpoint 없음 → W4A8 QAT 학습 시작...")
+            ckpt_path, acc = train_glue(task)
+            # Drive 백업 (마운트된 경우)
+            drive_path = f"/drive/MyDrive/{fname}"
+            if os.path.exists("/drive/MyDrive"):
+                import shutil
+                shutil.copy(ckpt_path, drive_path)
+                print(f"  Drive 백업 완료: {drive_path}")
         if os.path.exists(p):
             local_ckpts[task] = p
 
