@@ -9,6 +9,8 @@ BERT RRAM inference accuracy across multiple GLUE tasks.
   - GPU 사용 (Colab 기준)
 """
 import torch
+import random
+import numpy as np
 from torch.utils.data import DataLoader
 from datasets import load_dataset
 from transformers import BertTokenizer, AutoModelForSequenceClassification
@@ -17,6 +19,19 @@ import config
 from Inference import apply_quantlinear_with_stats
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# ============================================================
+# 재현성 보장
+# ============================================================
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seed(42)
 MAX_LEN = 128
 
 # ============================================================
