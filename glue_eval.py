@@ -44,6 +44,7 @@ GLUE_TASKS = {
         'keys':    ('sentence', None),
         'num_labels': 2,
         'model':   'textattack/bert-base-uncased-SST-2',
+        'batch_size': 32,
     },
     'mrpc': {
         'dataset': ('glue', 'mrpc'),
@@ -51,6 +52,7 @@ GLUE_TASKS = {
         'keys':    ('sentence1', 'sentence2'),
         'num_labels': 2,
         'model':   'textattack/bert-base-uncased-MRPC',
+        'batch_size': 32,
     },
     'mnli': {
         'dataset': ('glue', 'mnli'),
@@ -58,6 +60,7 @@ GLUE_TASKS = {
         'keys':    ('premise', 'hypothesis'),
         'num_labels': 3,
         'model':   'textattack/bert-base-uncased-MNLI',
+        'batch_size': 32,
     },
 }
 
@@ -129,7 +132,8 @@ def evaluate_task(task_name, local_sst2_ckpt=None, local_ckpts=None):
     model.to(DEVICE)
     model.eval()
 
-    loader, n_samples = _make_loader(task_name, tokenizer)
+    loader, n_samples = _make_loader(task_name, tokenizer,
+                                     batch_size=cfg['batch_size'])
 
     correct, total = 0, 0
     with torch.no_grad():

@@ -75,9 +75,13 @@ TASK_CONFIGS = {
         'val_split': 'validation',
         'keys': ('sentence1', 'sentence2'),
         'num_labels': 2,
-        'epochs': 5,
+        'epochs': 10,
         'batch_size': 32,
         'lr': 2e-5,
+        'distill': True,
+        'teacher_model': 'textattack/bert-base-uncased-MRPC',
+        'distill_alpha': 0.5,   # CE loss 비중 (1-alpha = KL loss 비중)
+        'distill_temp':  4.0,   # softmax temperature
     },
     'mnli': {
         'dataset': ('glue', 'mnli'),
@@ -117,7 +121,8 @@ def make_loader(data, tokenizer, keys, batch_size, shuffle):
 def train(task):
     cfg = TASK_CONFIGS[task]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"\nTask: {task.upper()}  |  Device: {device}")
+    use_distill = cfg.get('distill', False)
+    print(f"\nTask: {task.upper()}  |  Device: {device}  |  Distill: {use_distill}")
 
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     dataset = load_dataset(*cfg['dataset'])
@@ -131,6 +136,17 @@ def train(task):
     apply_qat(model)
     model.to(device)
 
+    # Teacher 로드 (distillation 사용 시)
+    teacher = None
+    if use_distill:
+        from transformers import AutoModelForSequenceClassification
+        teacher = AutoModelForSequenceClassification.from_pretrained(cfg['teacher_model'])
+        teacher.to(device)
+        teacher.eval()
+        for p in teacher.parameters():
+            p.requires_grad_(False)
+        print(f"  Teacher: {cfg['teacher_model']}")
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg['lr'], weight_decay=0.01)
     total_steps = len(train_loader) * cfg['epochs']
     scheduler = get_linear_schedule_with_warmup(
@@ -138,6 +154,8 @@ def train(task):
         num_training_steps=total_steps)
 
     best_acc, best_path = 0.0, f'W4A8_{task.upper()}_best.pt'
+    alpha = cfg.get('distill_alpha', 0.5)
+    T     = cfg.get('distill_temp',  4.0)
 
     for epoch in range(cfg['epochs']):
         # Train
@@ -146,7 +164,23 @@ def train(task):
         for batch in train_loader:
             batch = {k: v.to(device) for k, v in batch.items()}
             out = model(**batch)
-            loss = out.loss
+
+            if use_distill:
+                with torch.no_grad():
+                    t_logits = teacher(
+                        input_ids=batch['input_ids'],
+                        attention_mask=batch['attention_mask']
+                    ).logits
+                ce_loss = out.loss
+                kl_loss = F.kl_div(
+                    F.log_softmax(out.logits / T, dim=-1),
+                    F.softmax(t_logits / T, dim=-1),
+                    reduction='batchmean'
+                ) * (T ** 2)
+                loss = alpha * ce_loss + (1 - alpha) * kl_loss
+            else:
+                loss = out.loss
+
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
