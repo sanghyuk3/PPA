@@ -48,21 +48,24 @@ class ActQuantSTE(torch.autograd.Function):
         return grad
 
 class QuantLinear(nn.Linear):
-    def __init__(self, in_features, out_features):
-        super().__init__(in_features, out_features, bias=False)
+    def __init__(self, in_features, out_features, bias=True):
+        super().__init__(in_features, out_features, bias=bias)
     def forward(self, x):
         w_q = WeightQuantSTE.apply(self.weight)
         x_q = ActQuantSTE.apply(x)
-        return F.linear(x_q, w_q, None)
+        return F.linear(x_q, w_q, self.bias)
 
-def apply_qat(model):
+def apply_qat(model, keep_bias=True):
     """Replace Q/K/V projections with QuantLinear."""
     for layer in model.bert.encoder.layer:
         attn = layer.attention.self
         for name in ["query", "key", "value"]:
             old = getattr(attn, name)
-            ql = QuantLinear(old.in_features, old.out_features)
+            has_bias = keep_bias and (old.bias is not None)
+            ql = QuantLinear(old.in_features, old.out_features, bias=has_bias)
             ql.weight.data.copy_(old.weight.data)
+            if has_bias:
+                ql.bias.data.copy_(old.bias.data)
             setattr(attn, name, ql)
 
 # ============================================================
@@ -78,10 +81,11 @@ TASK_CONFIGS = {
         'epochs': 10,
         'batch_size': 32,
         'lr': 2e-5,
+        'keep_bias': True,      # pretrained bias 유지
         'distill': True,
         'teacher_model': 'textattack/bert-base-uncased-MRPC',
-        'distill_alpha': 0.5,   # CE loss 비중 (1-alpha = KL loss 비중)
-        'distill_temp':  4.0,   # softmax temperature
+        'distill_alpha': 0.5,
+        'distill_temp':  4.0,
     },
     'mnli': {
         'dataset': ('glue', 'mnli'),
@@ -92,6 +96,7 @@ TASK_CONFIGS = {
         'epochs': 3,
         'batch_size': 32,
         'lr': 2e-5,
+        'keep_bias': False,     # SST-2와 동일하게 bias 없음
     },
 }
 
@@ -133,7 +138,7 @@ def train(task):
 
     model = BertForSequenceClassification.from_pretrained(
         'bert-base-uncased', num_labels=cfg['num_labels'])
-    apply_qat(model)
+    apply_qat(model, keep_bias=cfg.get('keep_bias', False))
     model.to(device)
 
     # Teacher 로드 (distillation 사용 시)
