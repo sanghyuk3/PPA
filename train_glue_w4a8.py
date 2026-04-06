@@ -177,7 +177,7 @@ def train(task):
     for epoch in range(cfg['epochs']):
         # Train
         model.train()
-        total_loss = 0
+        total_loss = total_ce = total_kl = 0
         for batch in train_loader:
             batch = {k: v.to(device) for k, v in batch.items()}
             out = model(**batch)
@@ -195,6 +195,8 @@ def train(task):
                     reduction='batchmean'
                 ) * (T ** 2)
                 loss = alpha * ce_loss + (1 - alpha) * kl_loss
+                total_ce += ce_loss.item()
+                total_kl += kl_loss.item()
             else:
                 loss = out.loss
 
@@ -217,8 +219,14 @@ def train(task):
                 total += batch['labels'].size(0)
         acc = correct / total
 
-        print(f"  Epoch {epoch+1}/{cfg['epochs']}  "
-              f"loss={total_loss/len(train_loader):.4f}  val_acc={acc*100:.2f}%")
+        n = len(train_loader)
+        if use_distill:
+            print(f"  Epoch {epoch+1}/{cfg['epochs']}  "
+                  f"loss={total_loss/n:.4f}  ce={total_ce/n:.4f}  kl={total_kl/n:.4f}  "
+                  f"val_acc={acc*100:.2f}%")
+        else:
+            print(f"  Epoch {epoch+1}/{cfg['epochs']}  "
+                  f"loss={total_loss/n:.4f}  val_acc={acc*100:.2f}%")
 
         if acc > best_acc:
             best_acc = acc
