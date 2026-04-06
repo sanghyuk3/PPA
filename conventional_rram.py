@@ -58,25 +58,24 @@ def calculate_conventional_rram_ppa():
 
     # ========================
     # 1. Write Phase (KT thermal switching)
-    #    weight programming: 배열에 한 번 기록
+    #    문장마다 K^T를 RRAM에 write (seq_len × d_model cells per layer per sentence)
+    #    W_Q는 영구 저장 (write 불필요), K^T만 문장마다 새로 write
     # ========================
     E_set_per_cell   = calculate_rram_write_energy(CONV_V_WRITE_SET,   CONV_I_COMPLIANCE, CONV_T_WRITE_SET)
     E_reset_per_cell = calculate_rram_write_energy(CONV_V_WRITE_RESET, CONV_I_RESET,      CONV_T_WRITE_RESET)
-    # 평균: ternary weight → SET:RESET 비율 ≈ 1:1
     E_write_per_cell = (E_set_per_cell + E_reset_per_cell) / 2.0
 
-    # 전체 weight cell 수 (Q + K, 12 layer)
-    total_Q_cells = config.Q_D_IN  * config.Q_D_OUT * config.RRAM_LAYERS
-    total_K_cells = config.K_D_IN  * config.K_D_OUT * config.RRAM_LAYERS
-    total_cells   = total_Q_cells + total_K_cells
+    # K^T shape: seq_len × d_model, per layer per sentence
+    K_length = config.RRAM_SENT_LEN // 14          # actual seq_len
+    KT_cells_per_sentence = K_length * config.K_D_IN
 
-    E_write_total = total_cells * E_write_per_cell
+    total_KT_cells = KT_cells_per_sentence * config.RRAM_LAYERS * config.RRAM_NUM_SAMPLES
+    E_write_total  = total_KT_cells * E_write_per_cell
 
-    # Write latency: row-parallel (같은 행의 모든 열을 동시에 write)
-    T_write_per_row = CONV_T_WRITE_SET + CONV_T_WRITE_RESET       # SET + RESET per row
-    T_write_Q = config.Q_D_IN * config.RRAM_LAYERS * T_write_per_row
-    T_write_K = config.K_D_IN * config.RRAM_LAYERS * T_write_per_row
-    T_write_total = T_write_Q + T_write_K
+    # Write latency: K_length rows per layer per sentence, row-parallel
+    T_write_per_row      = CONV_T_WRITE_SET + CONV_T_WRITE_RESET
+    T_write_per_sentence = K_length * config.RRAM_LAYERS * T_write_per_row
+    T_write_total        = T_write_per_sentence * config.RRAM_NUM_SAMPLES
 
     # ========================
     # 2. Read Phase (Inference) - 느린 T_READ 적용
@@ -171,7 +170,7 @@ def print_conventional_rram_summary(r):
     print(f"    Avg E/cell : {r['E_write_per_cell_pJ']:.1f} pJ")
     print(f"  Read  : {CONV_T_READ*1e9:.0f}ns (vs ISAAC ideal {config.T_READ*1e9:.0f}ns)")
     print("-"*80)
-    print(f"  Write latency   : {r['T_write']*1e3:.3f} ms")
+    print(f"  Write latency   : {r['T_write']*1e3:.3f} ms  (K^T per sentence × {config.RRAM_NUM_SAMPLES} samples)")
     print(f"  Inference latency: {r['T_inference']*1e3:.3f} ms")
     print(f"  Total runtime   : {r['runtime']*1e3:.3f} ms")
     print(f"  Write energy    : {r['E_write']*1e3:.4f} mJ")
@@ -184,6 +183,32 @@ def print_conventional_rram_summary(r):
     print(f"  TOPS/mm²        : {r['TOPS_per_mm2']:.6f}")
     print(f"  Energy/sample   : {r['energy_per_sample']*1e6:.3f} μJ")
     print("="*80 + "\n")
+
+
+def calculate_conventional_rram_ppa_for_model(layers, d_model, sent_len, num_samples):
+    """
+    임의의 Transformer 모델에 대해 Conventional RRAM PPA 계산.
+    config 전역변수를 임시로 override 후 복구.
+    """
+    KEYS = ['RRAM_LAYERS', 'Q_D_IN', 'Q_D_OUT', 'K_D_IN', 'K_D_OUT',
+            'RRAM_SENT_LEN', 'RRAM_NUM_SAMPLES',
+            'Q_READ_MULTIPLIER', 'K_READ_MULTIPLIER']
+    saved = {k: getattr(config, k) for k in KEYS}
+    try:
+        rram_sent_len = sent_len * 14
+        config.RRAM_LAYERS        = layers
+        config.Q_D_IN             = d_model
+        config.Q_D_OUT            = d_model
+        config.K_D_IN             = d_model
+        config.K_D_OUT            = d_model
+        config.RRAM_SENT_LEN      = rram_sent_len
+        config.RRAM_NUM_SAMPLES   = num_samples
+        config.Q_READ_MULTIPLIER  = rram_sent_len * sent_len  # seq_len² × 14
+        config.K_READ_MULTIPLIER  = rram_sent_len
+        return calculate_conventional_rram_ppa()
+    finally:
+        for k, v in saved.items():
+            setattr(config, k, v)
 
 
 if __name__ == "__main__":

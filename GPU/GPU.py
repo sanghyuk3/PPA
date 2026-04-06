@@ -190,7 +190,7 @@ def _calculate_single_gpu(gpu_name):
     # 지표
     # ===================================
     power = total_energy / total_runtime 
-    tops = total_mac_ops / total_runtime / 1e12 
+    tops = (total_mac_ops * 2) / total_runtime / 1e12  # 1 MAC = 2 OPs
     tops_per_w = tops / power if power > 0 else 0
     area_mm2 = spec['die_size']
     tops_per_mm2 = tops / area_mm2 if area_mm2 > 0 else 0

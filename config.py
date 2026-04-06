@@ -23,7 +23,8 @@ PHYS_ROWS = 24
 PHYS_COLS = 24   # logical cols (physical 48 = pos + neg dual-rail)
 
 # Derived parameters
-Q_READ_MULTIPLIER = RRAM_SENT_LEN * 72  # 1296
+_K_LENGTH = RRAM_SENT_LEN // 14          # 실제 seq_len (K 벡터 개수)
+Q_READ_MULTIPLIER = RRAM_SENT_LEN * _K_LENGTH  # = seq_len² × 14
 K_READ_MULTIPLIER = RRAM_SENT_LEN
 
 # ============================================================
@@ -98,10 +99,10 @@ R_RRAM_Q = 1.0 / G_AVG_Q
 R_RRAM_K = 1.0 / G_AVG_K
 
 # Programming variation / tuning error (SW-matched, 24×24 측정, per-cell i.i.d.)
-VARIATION_MEAN_Q =  2.30e-3   # W_Q 평균 오차
-VARIATION_STD_Q  =  2.83e-2   # W_Q 표준편차
-VARIATION_MEAN_K = -2.64e-3   # W_K 평균 오차
-VARIATION_STD_K  =  2.19e-1   # W_K 표준편차
+VARIATION_MEAN_Q =  4.60e-4   # W_Q 평균 오차
+VARIATION_STD_Q  =  5.66e-3   # W_Q 표준편차
+VARIATION_MEAN_K = -5.27e-4   # W_K 평균 오차
+VARIATION_STD_K  =  4.39e-2   # W_K 표준편차
 
 # Legacy average (기존 수식 호환용)
 G_AVG = G_ON * 0.1 + G_OFF * 0.9

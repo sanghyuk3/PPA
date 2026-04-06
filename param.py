@@ -178,15 +178,17 @@ def compute_rram_ppa_for_model(layers, d_model, sent_len, num_samples):
             'Q_READ_MULTIPLIER', 'K_READ_MULTIPLIER']
     saved = {k: getattr(config, k) for k in KEYS}
     try:
+        # sent_len = 실제 토큰 수 (serial cycles 미포함)
+        rram_sent_len = sent_len * 14   # serial cycles 포함
         config.RRAM_LAYERS        = layers
         config.Q_D_IN             = d_model
         config.Q_D_OUT            = d_model
         config.K_D_IN             = d_model
         config.K_D_OUT            = d_model
-        config.RRAM_SENT_LEN      = sent_len
+        config.RRAM_SENT_LEN      = rram_sent_len
         config.RRAM_NUM_SAMPLES   = num_samples
-        config.Q_READ_MULTIPLIER  = sent_len * 72
-        config.K_READ_MULTIPLIER  = sent_len
+        config.Q_READ_MULTIPLIER  = rram_sent_len * sent_len  # = seq_len² × 14
+        config.K_READ_MULTIPLIER  = rram_sent_len
         return ISAAC_RRAM_PPA().get_full_results(verbose=False)
     finally:
         for k, v in saved.items():
