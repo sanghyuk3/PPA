@@ -91,11 +91,11 @@ TASK_CONFIGS = {
         'num_labels': 2,
         'epochs': 10,
         'batch_size': 32,
-        'lr': 2e-5,
+        'lr': 1e-5,
         'keep_bias': True,      # pretrained bias 유지
         'distill': True,
         'teacher_model': 'textattack/bert-base-uncased-MRPC',
-        'distill_alpha': 0.5,
+        'distill_alpha': 0.8,   # CE 80%, KL 20%
         'distill_temp':  4.0,
     },
     'mnli': {
