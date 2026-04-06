@@ -28,7 +28,6 @@ def set_seed(seed=42):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-set_seed(42)
 
 # ============================================================
 # W4A8 Quantization (same as SST-2 training)
@@ -135,7 +134,8 @@ def make_loader(data, tokenizer, keys, batch_size, shuffle):
 # ============================================================
 # Train
 # ============================================================
-def train(task):
+def train(task, seed=42):
+    set_seed(seed)
     cfg = TASK_CONFIGS[task]
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     use_distill = cfg.get('distill', False)
