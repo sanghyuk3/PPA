@@ -9,6 +9,8 @@ Usage:
 """
 import argparse
 import os
+import random
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,6 +19,16 @@ from datasets import load_dataset
 from transformers import BertTokenizer, BertForSequenceClassification, get_linear_schedule_with_warmup
 import warnings
 warnings.filterwarnings("ignore")
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seed(42)
 
 # ============================================================
 # W4A8 Quantization (same as SST-2 training)
