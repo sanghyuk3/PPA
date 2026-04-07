@@ -97,6 +97,7 @@ TASK_CONFIGS = {
         'teacher_model': 'textattack/bert-base-uncased-MRPC',
         'distill_alpha': 0.8,   # CE 80%, KL 20%
         'distill_temp':  4.0,
+        'eval_steps': 50,       # 50 step마다 중간 평가 (MRPC는 데이터 적어서 자주)
     },
     'mnli': {
         'dataset': ('glue', 'mnli'),
@@ -107,7 +108,12 @@ TASK_CONFIGS = {
         'epochs': 3,
         'batch_size': 32,
         'lr': 2e-5,
-        'keep_bias': False,     # SST-2와 동일하게 bias 없음
+        'keep_bias': True,
+        'distill': True,
+        'teacher_model': 'textattack/bert-base-uncased-MNLI',
+        'distill_alpha': 0.8,
+        'distill_temp':  4.0,
+        'eval_steps': 500,      # 500 step마다 중간 평가
     },
 }
 
@@ -171,14 +177,28 @@ def train(task, seed=42):
         num_training_steps=total_steps)
 
     best_acc, best_path = 0.0, f'W4A8_{task.upper()}_best.pt'
-    alpha = cfg.get('distill_alpha', 0.5)
-    T     = cfg.get('distill_temp',  4.0)
+    alpha      = cfg.get('distill_alpha', 0.5)
+    T          = cfg.get('distill_temp',  4.0)
+    eval_steps = cfg.get('eval_steps', None)
+    global_step = 0
+
+    def run_eval():
+        model.eval()
+        correct, total = 0, 0
+        with torch.no_grad():
+            for batch in val_loader:
+                batch = {k: v.to(device) for k, v in batch.items()}
+                preds = model(**batch).logits.argmax(dim=-1)
+                correct += (preds == batch['labels']).sum().item()
+                total   += batch['labels'].size(0)
+        model.train()
+        return correct / total
 
     for epoch in range(cfg['epochs']):
-        # Train
         model.train()
         total_loss = total_ce = total_kl = 0
-        for batch in train_loader:
+
+        for step, batch in enumerate(train_loader):
             batch = {k: v.to(device) for k, v in batch.items()}
             out = model(**batch)
 
@@ -206,19 +226,20 @@ def train(task, seed=42):
             optimizer.step()
             scheduler.step()
             total_loss += loss.item()
+            global_step += 1
 
-        # Validate
-        model.eval()
-        correct, total = 0, 0
-        with torch.no_grad():
-            for batch in val_loader:
-                batch = {k: v.to(device) for k, v in batch.items()}
-                out = model(**batch)
-                preds = out.logits.argmax(dim=-1)
-                correct += (preds == batch['labels']).sum().item()
-                total += batch['labels'].size(0)
-        acc = correct / total
+            # 중간 평가
+            if eval_steps and global_step % eval_steps == 0:
+                acc = run_eval()
+                print(f"    [step {global_step}] val_acc={acc*100:.2f}%", end="")
+                if acc > best_acc:
+                    best_acc = acc
+                    torch.save(model.state_dict(), best_path)
+                    print(f"  → saved (best={best_acc*100:.2f}%)", end="")
+                print()
 
+        # Epoch 끝 평가
+        acc = run_eval()
         n = len(train_loader)
         if use_distill:
             print(f"  Epoch {epoch+1}/{cfg['epochs']}  "
