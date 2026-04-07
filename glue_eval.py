@@ -123,9 +123,9 @@ def evaluate_task(task_name, local_sst2_ckpt=None, local_ckpts=None):
         if isinstance(sd, dict) and 'model_state_dict' in sd:
             sd = sd['model_state_dict']
         model.load_state_dict(sd, strict=False)
-        # MRPC는 bias 유지하여 학습 → force_no_bias=False
-        # SST-2, MNLI는 bias=False로 학습 → force_no_bias=True
-        force_no_bias = (task_name != 'mrpc')
+        # SST-2는 bias=False로 학습 → force_no_bias=True
+        # MRPC, MNLI는 keep_bias=True로 학습 → force_no_bias=False
+        force_no_bias = (task_name == 'sst2')
     else:
         model = AutoModelForSequenceClassification.from_pretrained(cfg['model'])
         force_no_bias = False  # textattack FP32 모델은 bias 유지
