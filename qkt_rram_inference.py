@@ -187,3 +187,44 @@ if __name__ == "__main__":
     print(f"\n=== Ideal W4A8 (no variation) ===")
     print(f"예측     : {'POSITIVE' if pred_ideal == 1 else 'NEGATIVE'}")
     print(f"확률     : NEG={probs_ideal[0]*100:.1f}%  POS={probs_ideal[1]*100:.1f}%")
+
+    # ============================================================
+    # 5. SW (FP32) 비교
+    # ============================================================
+    model_fp32 = BertForSequenceClassification.from_pretrained(
+        "bert-base-uncased", num_labels=2)
+    sd_fp32 = torch.load(ckpt_path, map_location="cpu")
+    if isinstance(sd_fp32, dict) and "model_state_dict" in sd_fp32:
+        sd_fp32 = sd_fp32["model_state_dict"]
+    model_fp32.load_state_dict(sd_fp32, strict=False)
+    model_fp32.to(DEVICE).eval()
+
+    with torch.no_grad():
+        logits_fp32 = model_fp32(**inputs).logits
+    pred_fp32  = logits_fp32.argmax(dim=-1).item()
+    probs_fp32 = torch.softmax(logits_fp32, dim=-1)[0]
+
+    print(f"\n=== SW FP32 (no quantization) ===")
+    print(f"예측     : {'POSITIVE' if pred_fp32 == 1 else 'NEGATIVE'}")
+    print(f"확률     : NEG={probs_fp32[0]*100:.1f}%  POS={probs_fp32[1]*100:.1f}%")
+
+    # ============================================================
+    # 6. 요약 비교표
+    # ============================================================
+    print(f"\n{'='*55}")
+    print(f"{'':20} {'SW (FP32)':>10} {'W4A8':>10} {'W4A8+RRAM':>10}")
+    print(f"{'-'*55}")
+    print(f"{'예측':20} "
+          f"{'POS' if pred_fp32==1 else 'NEG':>10} "
+          f"{'POS' if pred_ideal==1 else 'NEG':>10} "
+          f"{'POS' if pred==1 else 'NEG':>10}")
+    print(f"{'POS 확률(%)':20} "
+          f"{probs_fp32[1]*100:>10.1f} "
+          f"{probs_ideal[1]*100:>10.1f} "
+          f"{probs[1]*100:>10.1f}")
+    print(f"{'정답 여부':20} "
+          f"{'O' if pred_fp32==label else 'X':>10} "
+          f"{'O' if pred_ideal==label else 'X':>10} "
+          f"{'O' if pred==label else 'X':>10}")
+    print(f"{'='*55}")
+    print(f"문장: \"{sentence}\"")
