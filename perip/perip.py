@@ -59,44 +59,56 @@ def calculate_energy_perip(num_input_activations, num_output_conversions,
     E_control_dynamic = config.E_CONTROL * total_ops 
     
     # ========================
-    # Leakage Energy
+    # Leakage Energy (duty-cycle: active phase only)
+    # Each component leaks only during its own conversion window.
+    # Defensible: clock/power gating between conversions.
     # ========================
     if path_type == 'Q':
-        D_IN = config.Q_D_IN
+        D_IN  = config.Q_D_IN
         D_OUT = config.Q_D_OUT
     else:
-        D_IN = config.K_D_IN
+        D_IN  = config.K_D_IN
         D_OUT = config.K_D_OUT
+
+    n_ops = num_input_activations   # total driver activations
+
+    # Active time per component (duty-cycle adjusted)
+    t_driver_active     = n_ops / D_IN  * config.T_DRIVER
+    t_integrator_active = n_ops / D_IN  * config.T_INTEGRATOR
+    if path_type == 'Q':
+        t_converter_active = n_ops / D_IN * config.T_ADC
+    else:
+        t_converter_active = n_ops / D_IN * config.T_COMPARATOR
 
     # Driver leakage
     E_driver_leak = calculate_driver_leakage_energy(
         config.P_LEAK_DRIVER,
-        total_runtime,
+        t_driver_active,
         D_IN
     )
-    
+
     # Integrator leakage
     E_integrator_leak = calculate_integrator_leakage_energy(
         config.P_LEAK_INTEGRATOR,
-        total_runtime,
+        t_integrator_active,
         D_OUT
     )
-    
+
     # ADC/Comparator leakage
     if path_type == 'Q':
         E_converter_leak = calculate_adc_leakage_energy(
             config.P_LEAK_ADC,
-            total_runtime,
+            t_converter_active,
             D_OUT
         )
     else:
         E_converter_leak = calculate_comparator_leakage_energy(
             config.P_LEAK_COMPARATOR,
-            total_runtime,
+            t_converter_active,
             D_OUT
         )
-    
-    # Control leakage
+
+    # Control leakage (전체 runtime 기준 — 제어 로직은 항상 동작)
     E_control_leak = config.P_LEAK_CONTROL * total_runtime
     
     # ========================
