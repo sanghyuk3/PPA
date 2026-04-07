@@ -178,13 +178,7 @@ def _calculate_single_gpu(gpu_name):
     # compute energy
     compute_energy = spec['tdp'] * compute_time
 
-    total_dram_latency_time = (72) * spec['dram_latency']  # x,Q,K 총 6을 12layer
-    dram_idle_energy = spec['tdp'] * 0.15 * total_dram_latency_time  # 15% TDP
-
-    total_pipeline_latency_time = spec['GPU_PIPELINE_LATENCY'] * 3 * config.GPU_NUM_LAYERS  # Q, K, QKT
-    pipeline_idle_energy = spec['tdp'] * 0.3 * total_pipeline_latency_time  # 30% TDP
-
-    total_energy = memory_energy + compute_energy + dram_idle_energy + pipeline_idle_energy
+    total_energy = memory_energy + compute_energy
     
     # ===================================
     # 지표

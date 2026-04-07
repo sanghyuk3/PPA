@@ -57,28 +57,28 @@ V_SUPPLY = 1.0           # 1V, ADC나 이런 곳에서는 1.0V로 함.
 # Driver
 C_DRIVER_OUTPUT = 20e-15      # 20fF
 R_DRIVER = 100                # 100Ω
-P_LEAK_DRIVER = 1e-6          # 1μW
+P_LEAK_DRIVER = 0.1e-6        # 0.1μW (ideal 65nm driver)
 
 # Integrator
 C_INTEGRATOR_IN = 10e-15      # 10fF
 R_INTEGRATOR = 1000           # 1kΩ
-P_LEAK_INTEGRATOR = 2e-6      # 2μW
+P_LEAK_INTEGRATOR = 0.5e-6    # 0.5μW (ideal 65nm integrator)
 T_INTEGRATOR = 1e-9
 
 # ADC
 C_ADC_UNIT = 1e-15            # 1fF (SAR ADC unit cap)
 C_ADC_IN = 5e-15              # 5fF (ADC input cap)
 T_ADC = 6e-9                  # 6ns (ISAAC 65nm SAR ADC 기준)
-P_LEAK_ADC = 5e-6             # 5μW
+P_LEAK_ADC = 1e-6             # 1μW (ideal 65nm SAR ADC, ISAAC spec)
 
 # Comparator
 C_COMPARATOR_IN = 5e-15       # 5fF
 T_COMPARATOR = 0.5e-9         # 0.5ns (ideal regenerative comparator)
-P_LEAK_COMPARATOR = 1e-6      # 1μW
+P_LEAK_COMPARATOR = 0.1e-6    # 0.1μW (ideal regenerative comparator)
 
 # Control Logic
 E_CONTROL = 20e-15            # 20fJ per operation
-P_LEAK_CONTROL = 0.5e-6       # 0.5μW
+P_LEAK_CONTROL = 0.1e-6       # 0.1μW (ideal)
 
 # ============================================================
 # RRAM Cell Timing
