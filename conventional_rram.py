@@ -51,7 +51,7 @@ def calculate_conventional_rram_ppa():
     # MAC 연산 수 (ISAAC과 동일 workload)
     # ========================
     total_q_macs = (config.RRAM_NUM_SAMPLES * config.RRAM_LAYERS *
-                    config.Q_READ_MULTIPLIER * config.Q_D_IN * config.Q_D_OUT)
+                    config.Q_READ_MULTIPLIER * config.Q_D_IN * config.Q_D_OUT/config._K_LENGTH)
     total_k_macs = (config.RRAM_NUM_SAMPLES * config.RRAM_LAYERS *
                     config.K_READ_MULTIPLIER * config.K_D_IN * config.K_D_OUT)
     total_mac_ops = total_q_macs + total_k_macs
@@ -192,7 +192,7 @@ def calculate_conventional_rram_ppa_for_model(layers, d_model, sent_len, num_sam
     """
     KEYS = ['RRAM_LAYERS', 'Q_D_IN', 'Q_D_OUT', 'K_D_IN', 'K_D_OUT',
             'RRAM_SENT_LEN', 'RRAM_NUM_SAMPLES',
-            'Q_READ_MULTIPLIER', 'K_READ_MULTIPLIER']
+            'Q_READ_MULTIPLIER', 'K_READ_MULTIPLIER', '_K_LENGTH']
     saved = {k: getattr(config, k) for k in KEYS}
     try:
         rram_sent_len = sent_len * 14
@@ -203,6 +203,7 @@ def calculate_conventional_rram_ppa_for_model(layers, d_model, sent_len, num_sam
         config.K_D_OUT            = d_model
         config.RRAM_SENT_LEN      = rram_sent_len
         config.RRAM_NUM_SAMPLES   = num_samples
+        config._K_LENGTH          = sent_len
         config.Q_READ_MULTIPLIER  = rram_sent_len * sent_len  # seq_len² × 14
         config.K_READ_MULTIPLIER  = rram_sent_len
         return calculate_conventional_rram_ppa()
