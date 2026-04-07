@@ -41,7 +41,7 @@ GPU_NUM_SAMPLES = 872
 # ISAAC-based RRAM cell parameters
 V_READ = 0.2              # 200mV
 G_ON = 6.5e-6            # 6.5 μS = 1.3e-6 A
-G_OFF = 1.0e-6           # 1.0 μS = 0.2e-6 A
+G_OFF = 1.0e-7           # 0.1 μS (HRS, G_OFF < G_AVG_Q=0.564μS)
 ADC_RESOLUTION = 7        # 7-bit
 
 # Technology
@@ -63,17 +63,17 @@ P_LEAK_DRIVER = 1e-6          # 1μW
 C_INTEGRATOR_IN = 10e-15      # 10fF
 R_INTEGRATOR = 1000           # 1kΩ
 P_LEAK_INTEGRATOR = 2e-6      # 2μW
-T_INTEGRATOR = 5e-9 
+T_INTEGRATOR = 1e-9
 
 # ADC
 C_ADC_UNIT = 1e-15            # 1fF (SAR ADC unit cap)
 C_ADC_IN = 5e-15              # 5fF (ADC input cap)
-T_ADC = 90e-9                 # 10ns
+T_ADC = 6e-9                  # 6ns (ISAAC 65nm SAR ADC 기준)
 P_LEAK_ADC = 5e-6             # 5μW
 
 # Comparator
 C_COMPARATOR_IN = 5e-15       # 5fF
-T_COMPARATOR = 1.5e-9         # 1.5ns
+T_COMPARATOR = 0.5e-9         # 0.5ns (ideal regenerative comparator)
 P_LEAK_COMPARATOR = 1e-6      # 1μW
 
 # Control Logic
