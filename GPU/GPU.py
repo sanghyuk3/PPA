@@ -171,7 +171,7 @@ def _calculate_single_gpu(gpu_name):
     # ===================================
     # Energy
     # ===================================
-    Activation_bytes_per_sentence = X_size * 2 +  Q_size * 2 +  K_size * 2
+    Activation_bytes_per_sentence = X_size * 2 + Q_size * 2 + K_size * 2 + QKT_size * 2
     total_memory_bytes = Activation_bytes_per_sentence * config.GPU_NUM_SAMPLES * config.GPU_NUM_LAYERS
     memory_energy = total_memory_bytes * spec['dram_energy_per_byte']
     
