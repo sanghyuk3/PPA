@@ -23,7 +23,14 @@ from Cell import calculate_rram_write_energy
 # seq_len: BERT=128, GPT-2=1024, LLaMA=2048
 MODELS = {
     # Encoder (BERT)
-    'BERT-base':    {'layers': 12, 'd_model': 768,  'seq_len': 36},
+    'BERT-base':    {'layers': 12, 'd_model': 768,  'seq_len': 128},
+
+    # Vision Transformer (ViT) — 224×224 image, fixed seq_len
+    'ViT-B/32':     {'layers': 12, 'd_model': 768,  'seq_len': 50},   # 7×7 patches + CLS
+    'ViT-B/16':     {'layers': 12, 'd_model': 768,  'seq_len': 197},  # 14×14 patches + CLS
+    'ViT-L/16':     {'layers': 24, 'd_model': 1024, 'seq_len': 197},
+    'ViT-H/14':     {'layers': 32, 'd_model': 1280, 'seq_len': 257},  # 16×16 patches + CLS
+    'Swin-T':       {'layers': 12, 'd_model': 768,  'seq_len': 49},   # 7×7 local window
 
     # Decoder (GPT-2)
     'GPT-2 Small':  {'layers': 12, 'd_model': 768,  'seq_len': 1024},
