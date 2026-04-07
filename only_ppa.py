@@ -23,7 +23,7 @@ from Cell import calculate_rram_write_energy
 # seq_len: BERT=128, GPT-2=1024, LLaMA=2048
 MODELS = {
     # Encoder (BERT)
-    'BERT-base':    {'layers': 12, 'd_model': 768,  'seq_len': 128},
+    'BERT-base':    {'layers': 12, 'd_model': 768,  'seq_len': 36},
 
     # Decoder (GPT-2)
     'GPT-2 Small':  {'layers': 12, 'd_model': 768,  'seq_len': 1024},
@@ -56,6 +56,67 @@ def _isaac_write_once(layers, d_model):
 # ============================================================
 # PPA 계산
 # ============================================================
+def export_excel(rram_results, conv_results, gpu_results,
+                 filename='RRAM_PPA_Results.xlsx'):
+    """Origin에 바로 붙여넣기 가능한 Excel 생성. ISAAC이 맨 오른쪽."""
+    try:
+        import pandas as pd
+    except ImportError:
+        print("pandas 없음 — Excel 저장 스킵")
+        return
+
+    # 하드웨어 순서: Conv RRAM → GPU들 → ISAAC (맨 오른쪽)
+    hw_order = ['Conv_RRAM'] + GPU_LIST + ['ISAAC']
+
+    def _get(hw, name, key):
+        if hw == 'ISAAC':
+            return rram_results[name][key]
+        if hw == 'Conv_RRAM':
+            return conv_results[name][key]
+        g = gpu_results[name][hw]
+        return g.get(key) or g.get('total_' + key)
+
+    sheet_defs = [
+        ('Runtime(ms)',  'runtime',  1e3),
+        ('Energy(mJ)',   'energy',   1e3),
+        ('TOPS',         'TOPS',     1.0),
+        ('TOPS_W',       'TOPS_per_W', 1.0),
+        ('TOPS_mm2',     'TOPS_per_mm2', 1.0),
+    ]
+
+    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+        for sheet, key, scale in sheet_defs:
+            rows = []
+            for name, cfg in MODELS.items():
+                row = {'Model': name, 'seq_len': cfg['seq_len']}
+                for hw in hw_order:
+                    try:
+                        val = _get(hw, name, key)
+                        if val is None:
+                            # GPU dict uses total_runtime / total_energy
+                            alt = 'total_runtime' if key == 'runtime' else 'total_energy'
+                            val = gpu_results[name][hw].get(alt, float('nan'))
+                        row[hw] = val * scale
+                    except Exception:
+                        row[hw] = float('nan')
+                rows.append(row)
+            df = pd.DataFrame(rows).set_index('Model')
+            df.to_excel(writer, sheet_name=sheet)
+
+        # TOPS/W 배율 비교 시트 (ISAAC / GPU)
+        ratio_rows = []
+        for name in MODELS:
+            row = {'Model': name}
+            for gpu in GPU_LIST:
+                isaac_tpw = rram_results[name]['TOPS_per_W']
+                gpu_tpw   = gpu_results[name][gpu]['TOPS_per_W']
+                row[f'ISAAC_vs_{gpu}'] = isaac_tpw / gpu_tpw if gpu_tpw > 0 else float('inf')
+            ratio_rows.append(row)
+        pd.DataFrame(ratio_rows).set_index('Model').to_excel(writer, sheet_name='TOPS_W_Ratio')
+
+    print(f"\nExcel saved → {filename}")
+
+
 def run():
     rram_results = {}
     conv_results = {}
@@ -185,6 +246,8 @@ def run():
         print(f"{name:<16} {r['TOPS_per_W']:>16.2f} {c['TOPS_per_W']:>14.2f} {ratio:>9.1f}x")
     print("="*60)
 
+    return rram_results, conv_results, gpu_results
+
 
 def run_scaling():
     """
@@ -245,5 +308,6 @@ def run_scaling():
 
 
 if __name__ == "__main__":
-    run()
+    rram_r, conv_r, gpu_r = run()
     run_scaling()
+    export_excel(rram_r, conv_r, gpu_r)
